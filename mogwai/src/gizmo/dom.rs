@@ -917,6 +917,11 @@ mod gizmo_tests {
         };
     }
 
+    #[wasm_bindgen_test]
+    fn can_hydrate() {
+        assert!(false);
+    }
+
     //fn nice_compiler_error() {
     //    let _div = dom! {
     //        <div unknown:colon:thing="not ok" />
