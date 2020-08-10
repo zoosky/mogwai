@@ -379,7 +379,7 @@ impl<T: JsCast + AsRef<Element>> AttributeView for DomWrapper<T> {
 
 impl<T: JsCast + AsRef<Node>> ParentView<(&str, Receiver<String>)> for DomWrapper<T> {
     fn with(self, tuple: (&str, Receiver<String>)) -> Self {
-        let eff:Effect<String> = tuple.into();
+        let eff: Effect<String> = tuple.into();
         self.with(eff)
     }
 }
@@ -387,7 +387,7 @@ impl<T: JsCast + AsRef<Node>> ParentView<(&str, Receiver<String>)> for DomWrappe
 
 impl<T: JsCast + AsRef<Node>> ParentView<(String, Receiver<String>)> for DomWrapper<T> {
     fn with(self, tuple: (String, Receiver<String>)) -> Self {
-        let eff:Effect<String> = tuple.into();
+        let eff: Effect<String> = tuple.into();
         self.with(eff)
     }
 }
@@ -396,7 +396,7 @@ impl<T: JsCast + AsRef<Node>> ParentView<(String, Receiver<String>)> for DomWrap
 impl<T: JsCast + AsRef<Node>> ParentView<(&String, Receiver<String>)> for DomWrapper<T> {
     fn with(self, (now, later): (&String, Receiver<String>)) -> Self {
         let tuple = (now.clone(), later);
-        let eff:Effect<String> = tuple.into();
+        let eff: Effect<String> = tuple.into();
         self.with(eff)
     }
 }
@@ -703,7 +703,6 @@ impl From<&String> for DomWrapper<Text> {
 #[allow(unused_braces)]
 mod gizmo_tests {
     #[allow(unused_braces)]
-
     use super::{super::super::prelude::*, *};
     use crate as mogwai;
     use mogwai_html_macro::target_arch_is_wasm32;
@@ -833,7 +832,7 @@ mod gizmo_tests {
     #[wasm_bindgen_test]
     fn rx_style_jsx() {
         let (tx, rx) = txrx::<String>();
-        let div = dom!{ <div style:display=("block", rx) /> };
+        let div = dom! { <div style:display=("block", rx) /> };
         let div_el: &HtmlElement = div.as_ref();
         assert_eq!(
             div_el.outer_html(),
@@ -847,9 +846,8 @@ mod gizmo_tests {
     #[wasm_bindgen_test]
     fn rx_text() {
         let (tx, rx) = txrx();
-        let div = (DomWrapper::element("div") as DomWrapper<HtmlElement>)
-            .with(("initial", rx));
-        let el:&HtmlElement = div.as_ref();
+        let div = (DomWrapper::element("div") as DomWrapper<HtmlElement>).with(("initial", rx));
+        let el: &HtmlElement = div.as_ref();
         assert_eq!(el.inner_text().as_str(), "initial");
         tx.send(&"after".into());
         assert_eq!(el.inner_text(), "after");
@@ -857,23 +855,19 @@ mod gizmo_tests {
 
     #[wasm_bindgen_test]
     fn tx_on_click_plain() {
-        let (tx, rx) =
-            txrx_fold(
-                0,
-                |n:&mut i32, _:&Event| -> String {
-                    *n += 1;
-                    if *n == 1 {
-                        "Clicked 1 time".to_string()
-                    } else {
-                        format!("Clicked {} times", *n)
-                    }
-                }
-            );
+        let (tx, rx) = txrx_fold(0, |n: &mut i32, _: &Event| -> String {
+            *n += 1;
+            if *n == 1 {
+                "Clicked 1 time".to_string()
+            } else {
+                format!("Clicked {} times", *n)
+            }
+        });
 
         let button = (DomWrapper::element("button") as DomWrapper<HtmlElement>)
             .with(("Clicked 0 times", rx))
             .on("click", tx);
-        let el:&HtmlElement = button.as_ref();
+        let el: &HtmlElement = button.as_ref();
 
         assert_eq!(el.inner_html(), "Clicked 0 times");
         el.click();
@@ -882,21 +876,17 @@ mod gizmo_tests {
 
     #[wasm_bindgen_test]
     fn tx_on_click_jsx() {
-        let (tx, rx) =
-            txrx_fold(
-                0,
-                |n:&mut i32, _:&Event| -> String {
-                    *n += 1;
-                    if *n == 1 {
-                        "Clicked 1 time".to_string()
-                    } else {
-                        format!("Clicked {} times", *n)
-                    }
-                }
-            );
+        let (tx, rx) = txrx_fold(0, |n: &mut i32, _: &Event| -> String {
+            *n += 1;
+            if *n == 1 {
+                "Clicked 1 time".to_string()
+            } else {
+                format!("Clicked {} times", *n)
+            }
+        });
 
         let button = dom! { <button on:click=tx>{("Clicked 0 times", rx)}</button> };
-        let el:&HtmlElement = button.as_ref();
+        let el: &HtmlElement = button.as_ref();
 
         assert_eq!(el.inner_html(), "Clicked 0 times");
         el.click();
@@ -919,9 +909,47 @@ mod gizmo_tests {
 
     #[wasm_bindgen_test]
     fn can_hydrate() {
-        assert!(false);
+        let div_el: HtmlElement = {
+            let parent:HtmlElement = utils::document().create_element("div").unwrap().dyn_into::<HtmlElement>().unwrap();
+            parent.set_inner_html(r#"<div id="my_div" class="my_div"><p class="my_p" style="float: left;">Here is text</p></div>"#);
+            parent.first_child().unwrap().dyn_into::<HtmlElement>().unwrap()
+        };
+
+        let body = utils::document().body().unwrap();
+        body.append_child(&div_el).unwrap();
+
+        let last_child = body
+            .last_child()
+            .unwrap()
+            .dyn_into::<HtmlElement>()
+            .unwrap();
+        assert_eq!(
+            last_child.outer_html(),
+            r#"<div id="my_div" class="my_div"><p class="my_p" style="float: left;">Here is text</p></div>"#
+        );
+
+        let (tx, rx) = txrx::<String>();
+        let div = hydrate_dom! {
+            <div id="my_div" class="my_div"><p class="my_p" style:float="left">{("Here is text", rx)}</p></div>
+        };
+        assert_eq!(
+            div.outer_html(),
+            r#"<div id="my_div" class="my_div"><p class="my_p" style="float: left;">Here is text</p></div>"#
+        );
+
+        tx.send(&"More text".to_string());
+        assert_eq!(
+            div.outer_html(),
+            r#"<div id="my_div" class="my_div"><p class="my_p" style="float: left;">More text</p></div>"#
+        );
     }
 
+    #[test]
+    fn stringy() {
+        let string = r#"hello    there is       spaces here."#;
+        assert_eq!(string.split_whitespace().collect::<Vec<_>>().join(" "), "hello there is spaces here.");
+
+    }
     //fn nice_compiler_error() {
     //    let _div = dom! {
     //        <div unknown:colon:thing="not ok" />
