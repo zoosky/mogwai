@@ -9,7 +9,7 @@ pub use super::{
     utils::*,
     *,
 };
-pub use mogwai_html_macro::dom;
+pub use mogwai_html_macro::{dom, hydrate_dom};
 pub use wasm_bindgen::JsCast;
 pub use wasm_bindgen_futures::JsFuture;
 pub use web_sys::{Element, Event, EventTarget, HtmlElement, HtmlInputElement, Node};

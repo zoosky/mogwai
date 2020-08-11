@@ -114,29 +114,6 @@ impl<T: JsCast> DomWrapper<T> {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn element(name: &str) -> Self {
-        DomWrapper {
-            element: Rc::new(JsValue::NULL),
-            phantom: std::marker::PhantomData,
-            server_node: ServerNode {
-                name_or_text: NameOrText::Name(name.into()),
-                attributes: vec![],
-                styles: vec![],
-            },
-            children: vec![],
-        }
-    }
-    #[cfg(target_arch = "wasm32")]
-    pub fn element(name: &str) -> Self {
-        let name = name.into();
-        let el = utils::document()
-            .create_element(name)
-            .expect(&format!("cannot create element {:?}", name))
-            .unchecked_into();
-        DomWrapper::wrapping(el)
-    }
-
     /// Adds a DomWrapper as a child node.
     pub fn add_child<E: JsCast + AsRef<Node> + Clone>(&mut self, child: DomWrapper<E>) {
         if cfg!(target_arch = "wasm32") {
@@ -224,6 +201,67 @@ impl<T: JsCast> View for DomWrapper<T> {
         } else {
             let node = self.to_ssr_node();
             return String::from(node);
+        }
+    }
+}
+
+
+impl<T: JsCast> ElementView for DomWrapper<T> {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn element(name: &str) -> Self {
+        DomWrapper {
+            element: Rc::new(JsValue::NULL),
+            phantom: std::marker::PhantomData,
+            server_node: ServerNode {
+                name_or_text: NameOrText::Name(name.into()),
+                attributes: vec![],
+                styles: vec![],
+            },
+            children: vec![],
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    fn element(name: &str) -> Self {
+        let name = name.into();
+        let el = utils::document()
+            .create_element(name)
+            .expect(&format!("cannot create element {:?}", name))
+            .unchecked_into();
+        DomWrapper::wrapping(el)
+    }
+
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn element_ns(name: &str, ns: &str) -> Self {
+        DomWrapper {
+            element: Rc::new(JsValue::NULL),
+            phantom: std::marker::PhantomData,
+            server_node: ServerNode {
+                name_or_text: NameOrText::Name(name.into()),
+                attributes: vec![("xmlns".into(), Some(ns.to_string()))],
+                styles: vec![],
+            },
+            children: vec![],
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    fn element_ns(name: &str, ns: &str) -> Self {
+        let name = name.into();
+        let el = utils::document()
+            .create_element_ns(name, ns.into())
+            .expect(&format!("cannot create element {:?}", name))
+            .unchecked_into();
+        DomWrapper::wrapping(el)
+    }
+
+    fn from_element_by_id(id:&str) -> Option<Self> {
+        if cfg!(target_arch = "wasm32") {
+            utils::document().get_element_by_id(id).map(|el| {
+                let el_t = el.dyn_into::<T>().expect("DomWrapper::from_element_by_id found element is wrong type");
+                DomWrapper::wrapping(el_t)
+            })
+        } else {
+            None
         }
     }
 }
@@ -939,7 +977,7 @@ mod gizmo_tests {
 
         tx.send(&"More text".to_string());
         assert_eq!(
-            div.outer_html(),
+            last_child.outer_html(),
             r#"<div id="my_div" class="my_div"><p class="my_p" style="float: left;">More text</p></div>"#
         );
     }

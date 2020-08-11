@@ -60,6 +60,18 @@ fn attribute_to_token_stream(node: Node) -> Result<proc_macro2::TokenStream, Err
 }
 
 
+fn node_id_attribute_value(node: &Node) -> Option<syn::Expr> {
+    for attribute in node.attributes.iter() {
+        if let Some(name) = attribute.name_as_string() {
+            if name == "id"  {
+                return attribute.value.clone();
+            }
+        }
+    }
+    return None;
+}
+
+
 fn partition_unzip<T, F>(items: Vec<T>, f: F) -> (Vec<proc_macro2::TokenStream>, Vec<Error>)
 where
     F: Fn(T) -> Result<proc_macro2::TokenStream, Error>,
@@ -87,7 +99,7 @@ fn combine_errors(errs: Vec<Error>) -> Option<Error> {
 }
 
 
-fn node_to_token_stream(node: Node) -> Result<proc_macro2::TokenStream, Error> {
+fn node_to_token_stream(hydrate: bool, node: Node) -> Result<proc_macro2::TokenStream, Error> {
     match node.node_type {
         NodeType::Element => {
             if let Some(tag) = node.name_as_string() {
@@ -95,14 +107,34 @@ fn node_to_token_stream(node: Node) -> Result<proc_macro2::TokenStream, Error> {
                     "input" => quote! { web_sys::HtmlInputElement },
                     _ => quote! { web_sys::HtmlElement },
                 };
-                let mut errs: Vec<Error> = vec![];
 
+                let normal_wrapper =
+                    quote! {
+                        (mogwai::gizmo::dom::DomWrapper::element(#tag) as DomWrapper<#type_is>)
+                    };
+                let wrapper =
+                    if hydrate {
+                        if let Some(expr) = node_id_attribute_value(&node) {
+                            quote! {
+                                ((mogwai::gizmo::dom::DomWrapper::from_element_by_id(#expr) as Option<DomWrapper<#type_is>>)
+                                 .unwrap_or_else(||
+                                     mogwai::gizmo::dom::DomWrapper::element(#tag) as DomWrapper<#type_is>
+                                 ))
+                            }
+                        } else {
+                            normal_wrapper
+                        }
+                    } else {
+                        normal_wrapper
+                    };
+
+                let mut errs: Vec<Error> = vec![];
                 let (attribute_tokens, attribute_errs) =
                     partition_unzip(node.attributes, attribute_to_token_stream);
                 errs.extend(attribute_errs);
 
                 let (child_tokens, child_errs) =
-                    partition_unzip(node.children, node_to_token_stream);
+                    partition_unzip(node.children, |x| node_to_token_stream(hydrate, x));
                 let child_tokens = child_tokens
                     .into_iter()
                     .map(|child| quote! { .with(#child) });
@@ -113,7 +145,7 @@ fn node_to_token_stream(node: Node) -> Result<proc_macro2::TokenStream, Error> {
                     Err(error)
                 } else {
                     Ok(quote! {
-                        (mogwai::gizmo::dom::DomWrapper::element(#tag) as DomWrapper<#type_is>)
+                        #wrapper
                            #(#attribute_tokens)*
                            #(#child_tokens)*
 
@@ -139,11 +171,10 @@ fn node_to_token_stream(node: Node) -> Result<proc_macro2::TokenStream, Error> {
 }
 
 
-#[proc_macro]
-pub fn dom(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+fn make_dom(hydrate: bool, input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match syn_rsx::parse(input, None) {
         Ok(parsed) => {
-            let (tokens, errs) = partition_unzip(parsed, node_to_token_stream);
+            let (tokens, errs) = partition_unzip(parsed, |x| node_to_token_stream(hydrate, x));
             if let Some(error) = combine_errors(errs) {
                 error.to_compile_error().into()
             } else {
@@ -164,6 +195,18 @@ pub fn dom(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             })
         }
     }
+}
+
+
+#[proc_macro]
+pub fn dom(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    make_dom(false, input)
+}
+
+
+#[proc_macro]
+pub fn hydrate_dom(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    make_dom(true, input)
 }
 
 
